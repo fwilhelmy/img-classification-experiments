@@ -90,8 +90,8 @@ class MLP(torch.nn.Module):
         :param images: [batch, channels, width, height]
         :return logits: [batch, num_classes]
         """
+        
         x = images.view(images.size(0), -1)
         for layer in self.hidden_layers:
             x = self.activation_fn(self.activation, layer(x))
-        logits = self.output_layer(x)
-        return logits
+        return self.output_layer(x)
