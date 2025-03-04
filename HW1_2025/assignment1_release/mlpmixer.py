@@ -8,16 +8,14 @@ import os
 class PatchEmbed(nn.Module):
     """ 2D Image to Patch Embedding
     """
-    def __init__(self, img_size, patch_size, in_chans=3, 
-                 embed_dim=768):
+    def __init__(self, img_size, patch_size, in_chans=3, embed_dim=768):
         super(PatchEmbed, self).__init__()
         self.img_size = img_size
         self.patch_size = patch_size
         self.grid_size = img_size // patch_size
         self.num_patches = self.grid_size * self.grid_size
         
-        # Uncomment this line and replace ? with correct values
-        #self.proj = nn.Conv2d(?, ?, kernel_size=?, stride=?)
+        self.proj = nn.Conv2d(in_channels=in_chans, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
         """
@@ -76,7 +74,21 @@ class MixerBlock(nn.Module):
         self.mlp_channels = Mlp(dim, channels_dim, act_layer=act_layer, drop=drop)
 
     def forward(self, x):
-        raise NotImplementedError
+        # Token mixing
+        residual = x
+        output = self.norm1(x)
+        output = output.transpose(1, 2) # [batch, embed_dim, num_patches]
+        output = self.mlp_tokens(output) # Apply MLP on token dimension
+        output = output.transpose(1, 2) # [batch, num_patches, embed_dim]
+        output = output + residual # Skip-connection
+
+        # Channel mixing
+        residual = output
+        output = self.norm2(output)
+        output = self.mlp_channels(output) # Apply MLP on channel dimension
+        output = output + residual # Skip-connection
+
+        return output
     
 
 class MLPMixer(nn.Module):
@@ -112,12 +124,19 @@ class MLPMixer(nn.Module):
         """ MLPMixer forward
         :param images: [batch, 3, img_size, img_size]
         """
-        # step1: Go through the patch embedding
-        # step 2 Go through the mixer blocks
-        # step 3 go through layer norm
-        # step 4 Global averaging spatially
-        # Classification
-        raise NotImplementedError
+
+        # Step 1 : Convert images to a sequence of patch embeddings
+        output = self.patchemb(images) # [batch, num_patches, embed_dim]
+        # Step 2 : Go through the mixer blocks
+        output = self.blocks(output) # [batch, num_patches, embed_dim]
+        # Step 3 : Layer norm
+        output = self.norm(output) # [batch, num_patches, embed_dim]
+        # Step 4 : Global average pooling over the patch (token) dimension
+        output = output.mean(dim=1) # [batch, embed_dim]
+        # Step 5 : Final classification head
+        output = self.head(output) # [batch, num_classes]
+
+        return output
     
     def visualize(self, logdir):
         """ Visualize the token mixer layer 
