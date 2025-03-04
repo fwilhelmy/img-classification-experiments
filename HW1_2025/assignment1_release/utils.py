@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import os
 import json
 
-
 def generate_plots(list_of_dirs, legend_names, save_path):
     """ Generate plots according to log 
     :param list_of_dirs: List of paths to log directories
@@ -27,7 +26,6 @@ def generate_plots(list_of_dirs, legend_names, save_path):
         ax.set_xlabel('epochs')
         ax.set_ylabel(yaxis.replace('_', ' '))
         fig.savefig(os.path.join(save_path, f'{yaxis}.png'))
-        
 
 def seed_experiment(seed):
     """Seed the pseudorandom number generator, for repeatability.
@@ -39,7 +37,6 @@ def seed_experiment(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.benchmark = True
-
 
 def to_device(tensors, device):
     if isinstance(tensors, torch.Tensor):
@@ -61,7 +58,11 @@ def cross_entropy_loss(logits: torch.Tensor, labels: torch.Tensor):
     :param labels: [batch_size]
     :return loss 
     """
-    raise NotImplementedError
+    logits = torch.exp(logits - logits.max(dim=1, keepdim=True)[0])
+    softmax = logits / logits.sum(dim=1, keepdim=True)
+    true_prob = softmax[torch.arange(softmax.shape[0]), labels]
+    loss = -torch.log(true_prob).mean()
+    return loss
 
 def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor):
     """ Compute the accuracy of the batch """
