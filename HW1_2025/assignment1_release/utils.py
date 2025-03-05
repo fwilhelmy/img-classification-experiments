@@ -62,6 +62,7 @@ def cross_entropy_loss(logits: torch.Tensor, labels: torch.Tensor):
     softmax = logits / logits.sum(dim=1, keepdim=True)
     true_prob = softmax[torch.arange(softmax.shape[0]), labels]
     loss = -torch.log(true_prob).mean()
+
     return loss
 
 def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor):
