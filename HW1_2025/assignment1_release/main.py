@@ -9,7 +9,7 @@ import torch
 from torch import optim
 from torchvision.datasets import CIFAR10
 from torchvision import transforms
-from utils import seed_experiment, to_device, cross_entropy_loss, compute_accuracy
+from utils import generate_plots, seed_experiment, to_device, cross_entropy_loss, compute_accuracy
 from config import get_config_parser
 import json
 from mlp import MLP
@@ -71,11 +71,9 @@ def evaluate(epoch, model, dataloader, args, mode="val"):
         )
     return epoch_loss, epoch_accuracy, time.time() - start_time
 
-        
-if __name__ == "__main__":
-    parser = get_config_parser()
-    args = parser.parse_args()
-
+# Main code entry. Train the model and save the logs
+from main import train, evaluate
+def main_entry(args):
     # Check for the device
     if (args.device == "cuda") and not torch.cuda.is_available():
         warnings.warn(
@@ -112,7 +110,7 @@ if __name__ == "__main__":
 
     # Loading the test set
     test_set = CIFAR10(root='./data', train=False, transform=test_transform, download=True)
-    
+
     # Load model
     print(f'Build model {args.model.upper()}...')
     if args.model_config is not None:
@@ -128,7 +126,7 @@ if __name__ == "__main__":
     model_cls = {'mlp': MLP, 'resnet18': ResNet18, 'mlpmixer': MLPMixer}[args.model]
     model = model_cls(**model_config)
     model.to(args.device)
-    
+
     # Optimizer
     if args.optimizer == "adamw":
         optimizer = optim.AdamW(
@@ -147,7 +145,7 @@ if __name__ == "__main__":
             momentum=args.momentum,
             weight_decay=args.weight_decay,
         )
-    
+
     print(
         f"Initialized {args.model.upper()} model with {sum(p.numel() for p in model.parameters())} "
         f"total parameters, of which {sum(p.numel() for p in model.parameters() if p.requires_grad)} are learnable."
@@ -156,7 +154,7 @@ if __name__ == "__main__":
     train_losses, valid_losses = [], []
     train_accs, valid_accs = [], []
     train_times, valid_times = [], []
-    
+
     # We define a set of data loaders that we can use for various purposes later.
     train_dataloader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=4)
     valid_dataloader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
@@ -194,7 +192,18 @@ if __name__ == "__main__":
                 },
                 indent=4,
             ))
-    
+
         # Visualize
         if args.visualize and args.model in ['resnet18', 'mlpmixer']:
             model.visualize(args.logdir)
+
+def run_experiment(title, configs):
+    for name in configs:
+        config = configs[name]
+        main_entry(config)
+        generate_plots([config.logdir], [name], config.logdir)
+
+    generate_plots([configs[x].logdir for x in configs], configs.keys(), f"results/{title}")
+
+if __name__ == "__main__":
+    
