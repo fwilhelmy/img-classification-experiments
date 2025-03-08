@@ -6,8 +6,7 @@ Reference:
 '''
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 
 class BasicBlock(nn.Module):
     
@@ -80,6 +79,49 @@ class ResNet18(nn.Module):
         output = self.linear(output)
         return output
 
-    def visualize(self, logdir):
+    def visualize(self, n_layer, logdir):
         """ Visualize the kernel in the desired directory """
-        raise NotImplementedError
+        for name, module in self.named_modules():
+            if not isinstance(module, torch.nn.Conv2d):
+                continue
+
+            # Get filters and bias from the module
+            filters = module.weight.data
+            bias = module.bias  # could be None
+
+            print(f'Layer: {module}, Weights: {filters.shape}')
+
+            # Normalize filter values to 0-1 using min-max normalization
+            f_max, f_min = filters.max().item(), filters.min().item()
+            normalised_filters = (filters - f_min) / (f_max - f_min)
+
+            # Define the number of filters to visualize and number of channels per filter.
+            n_filters = 6
+            num_channels = filters.shape[1]  # e.g., 3 for RGB
+
+            # Create a figure with rows for channels and columns for filters.
+            plt.figure(figsize=(n_filters * 3, num_channels * 3))
+            
+            # Iterate over each channel (row) and each filter (column).
+            for channel in range(num_channels):
+                for i in range(n_filters):
+                    ax = plt.subplot(num_channels, n_filters, channel * n_filters + i + 1)
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+
+                    # Get the i-th filter; shape: (in_channels, kernel_height, kernel_width)
+                    f = normalised_filters[i]
+                    
+                    # For the top row (channel 0), add descriptive text as the subplot title.
+                    if channel == 0:
+                        filter_shape = tuple(f.shape)
+                        filter_bias = bias[i].item() if bias is not None else 'None'
+                        ax.set_title(f'Filter {i}\nShape: {filter_shape}\nBias: {filter_bias}', fontsize=8)
+                    
+                    # Plot the corresponding channel of the filter.
+                    plt.imshow(f[channel].cpu().numpy(), cmap='gray')
+                    
+            plt.tight_layout()
+            plt.show()
+            plt.close()
+            break
