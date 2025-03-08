@@ -3,7 +3,9 @@ import torch
 import math
 import matplotlib.pyplot as plt
 import os
-
+import math
+import torch
+import matplotlib.pyplot as plt
 
 class PatchEmbed(nn.Module):
     """ 2D Image to Patch Embedding
@@ -137,9 +139,67 @@ class MLPMixer(nn.Module):
         output = self.head(output) # [batch, num_classes]
 
         return output
-    
-    def visualize(self, logdir):
-        """ Visualize the token mixer layer 
-        in the desired directory """
-        raise NotImplementedError
- 
+
+    def visualize(self, block_index=0):
+        """
+        Visualize the weights (only the first linear layer) of the token-mixing MLP 
+        in the specified MixerBlock (by index). The weights are reshaped into a 
+        (sqrt(num_patches), sqrt(num_patches)) grid for visualization and displayed.
+        
+        :param block_index: Index of the MixerBlock in self.blocks to visualize.
+        """
+        # 1. Validate block_index
+        if block_index < 0 or block_index >= len(self.blocks):
+            raise IndexError(f"block_index={block_index} is out of range for {len(self.blocks)} MixerBlocks.")
+
+        # 2. Get the specified MixerBlock
+        mixer_block = self.blocks[block_index]
+
+        # 3. Extract the token-mixing MLP from that block
+        token_mlp = mixer_block.mlp_tokens
+
+        # 4. Get the weights from the first linear layer (fc1) in the token-mixing MLP
+        #    shape: (hidden_features, seq_len) => each row is one hidden unit, each column is one patch
+        weight = token_mlp.fc1.weight.data.cpu().numpy()
+
+        # 5. Figure out how many patches we have (seq_len) and verify shape
+        seq_len = self.patchemb.num_patches  # e.g., 196 for a 14x14 patch grid
+        if weight.shape[1] != seq_len:
+            raise ValueError(
+                f"Expected {seq_len} columns in fc1.weight, but got {weight.shape[1]}."
+            )
+
+        # 6. Compute the side of the patch grid (e.g., 14 for 14x14)
+        side = int(math.sqrt(seq_len))
+        if side * side != seq_len:
+            raise ValueError(
+                f"Number of patches {seq_len} is not a perfect square, cannot reshape to a square."
+            )
+
+        # 7. Determine how many hidden units we have and set up a grid of subplots
+        tokens_dim = weight.shape[0]
+        grid_size = int(math.ceil(math.sqrt(tokens_dim)))
+        fig, axes = plt.subplots(grid_size, grid_size, figsize=(grid_size * 2, grid_size * 2))
+        axes = axes.flatten()
+
+        # 8. Plot each hidden unit as a heatmap
+        for i in range(tokens_dim):
+            row_weights = weight[i]  # shape: (seq_len,)
+            patch_map = row_weights.reshape(side, side)
+            ax = axes[i]
+            ax.imshow(patch_map, cmap='bwr')  # 'bwr' highlights positive vs. negative
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+        # Hide any unused subplots if tokens_dim is not a perfect square
+        for i in range(tokens_dim, grid_size * grid_size):
+            axes[i].axis('off')
+
+        fig.suptitle(
+            f"Token-mixing MLP (fc1) weights in MixerBlock {block_index}",
+            fontsize=14
+        )
+        plt.tight_layout()
+
+        # 9. Display the figure
+        plt.show()
