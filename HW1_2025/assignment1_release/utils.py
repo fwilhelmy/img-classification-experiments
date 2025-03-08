@@ -52,7 +52,6 @@ def to_device(tensors, device):
     else:
         raise NotImplementedError("Unknown type {0}".format(type(tensors)))
 
-
 def cross_entropy_loss(logits: torch.Tensor, labels: torch.Tensor):
     """ Return the mean loss for this batch
     :param logits: [batch_size, num_class]
