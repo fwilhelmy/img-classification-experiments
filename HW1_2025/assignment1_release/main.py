@@ -9,7 +9,7 @@ import torch
 from torch import optim
 from torchvision.datasets import CIFAR10
 from torchvision import transforms
-from utils import generate_plots, seed_experiment, to_device, cross_entropy_loss, compute_accuracy
+from utils import generate_plots, seed_experiment, to_device, cross_entropy_loss, compute_accuracy, save_model, load_model
 from config import get_config_parser
 import json
 from mlp import MLP
@@ -19,6 +19,31 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 import time
 import os
+from dataclasses import dataclass
+
+@dataclass
+class Arguments:
+  # Data
+  batch_size: int = 128
+  # Model
+  model: str = 'mlp'  # [mlp, resnet18, mlpmixer]
+  model_config: str = "./model_configs/mlp.json" # path to model config json file
+
+  # Optimization
+  optimizer: str = 'adamw'  # [sgd, momentum, adam, adamw]
+  epochs: int = 15
+  lr: float = 1e-3
+  momentum: float = 0.9
+  weight_decay: float = 5e-4
+
+  # Experiment
+  logdir: str = '/content/assignment/logs'
+  seed: int = 42
+
+  # Miscellaneous
+  device: str = 'cuda'
+  visualize : bool = False
+  print_every: int = 80
 
 def train(epoch, model, dataloader, optimizer, args):
     model.train()
@@ -192,6 +217,7 @@ def main_entry(args):
                 },
                 indent=4,
             ))
+        save_model(model, args.logdir)
 
         # Visualize
         if args.visualize and args.model in ['resnet18', 'mlpmixer']:
@@ -206,4 +232,5 @@ def run_experiment(title, configs):
     generate_plots([configs[x].logdir for x in configs], configs.keys(), f"results/{title}")
 
 if __name__ == "__main__":
-    
+    # TODO
+    print("TODO: Implement the main code entry")
