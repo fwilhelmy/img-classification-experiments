@@ -20,6 +20,8 @@ from torch.utils.data import DataLoader
 import time
 import os
 from dataclasses import dataclass
+import contextlib
+from torchsummary import summary
 
 @dataclass
 class Arguments:
@@ -218,18 +220,23 @@ def main_entry(args):
                 indent=4,
             ))
         save_model(model, args.logdir)
+        with open(os.path.join(args.logdir, 'summary.txt'), "w") as f:
+            with contextlib.redirect_stdout(f):
+                print(f'{args.model.upper()} CONFIGURATION')
+                print("----------------------------------------------------------------")
+                for key, val in model_config.items():
+                    print(f'{key}:\t{val}')
+                summary(model, input_size=train_dataset.data[0].shape)
 
         # Visualize
         if args.visualize and args.model in ['resnet18', 'mlpmixer']:
             model.visualize(args.logdir)
 
-def run_experiment(title, configs):
+def run_experiment(configs):
     for name in configs:
         config = configs[name]
         main_entry(config)
         generate_plots([config.logdir], [name], config.logdir)
-
-    generate_plots([configs[x].logdir for x in configs], configs.keys(), f"results/{title}")
 
 if __name__ == "__main__":
     # TODO
