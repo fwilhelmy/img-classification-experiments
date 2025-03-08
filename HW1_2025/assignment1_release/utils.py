@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import json
+import torch.nn as nn
 
 def generate_plots(list_of_dirs, legend_names, save_path):
     """ Generate plots according to log 
@@ -69,3 +70,18 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor):
     """ Compute the accuracy of the batch """
     acc = (logits.argmax(dim=1) == labels).float().mean()
     return acc
+
+def save_model(model: nn.Module, logdir: str) -> None:
+    """ Save the model's state dictionary """
+    os.makedirs(logdir, exist_ok=True)
+    save_path = os.path.join(logdir, "model.pth")
+    torch.save(model, save_path)        
+    print(f"Model saved to {save_path}")
+
+def load_model(model: nn.Module, logdir: str, map_location=None) -> nn.Module:
+    """ Load the model's state dictionary """
+    load_path = os.path.join(logdir, "model.pth")
+    # If map_location is None, will load onto the devices originally saved from. 
+    model = torch.load(load_path, map_location=map_location, weights_only=False)
+    print(f"Model loaded from {load_path}")
+    return model
