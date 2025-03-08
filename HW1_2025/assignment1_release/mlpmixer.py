@@ -8,8 +8,7 @@ import torch
 import matplotlib.pyplot as plt
 
 class PatchEmbed(nn.Module):
-    """ 2D Image to Patch Embedding
-    """
+    """ 2D Image to Patch Embedding """
     def __init__(self, img_size, patch_size, in_chans=3, embed_dim=768):
         super(PatchEmbed, self).__init__()
         self.img_size = img_size
@@ -28,7 +27,7 @@ class PatchEmbed(nn.Module):
         assert H == self.img_size, f"Input image height ({H}) doesn't match model ({self.img_size})."
         assert W == self.img_size, f"Input image width ({W}) doesn't match model ({self.img_size})."
         x = self.proj(x)
-        x = x.flatten(2).transpose(1, 2)  # BCHW -> BNC
+        x = x.flatten(2).transpose(1, 2) # BCHW -> BNC
         return x
 
 
@@ -95,7 +94,7 @@ class MixerBlock(nn.Module):
 
 class MLPMixer(nn.Module):
     def __init__(self, num_classes, img_size, patch_size, embed_dim, num_blocks, 
-                 drop_rate=0., activation='gelu'):
+                 drop_rate=0., activation='gelu', mlp_ratio=(0.5, 4.0)):
         super(MLPMixer, self).__init__()
         self.patchemb = PatchEmbed(img_size=img_size, 
                                    patch_size=patch_size, 
@@ -104,7 +103,7 @@ class MLPMixer(nn.Module):
         self.blocks = nn.Sequential(*[
             MixerBlock(
                 dim=embed_dim, seq_len=self.patchemb.num_patches, 
-                activation=activation, drop=drop_rate)
+                mlp_ratio=mlp_ratio, activation=activation, drop=drop_rate)
             for _ in range(num_blocks)])
         self.norm = nn.LayerNorm(embed_dim)
         self.head = nn.Linear(embed_dim, num_classes)
