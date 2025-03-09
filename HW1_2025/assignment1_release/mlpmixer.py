@@ -163,17 +163,11 @@ class MLPMixer(nn.Module):
 
         # 5. Figure out how many patches we have (seq_len) and verify shape
         seq_len = self.patchemb.num_patches  # e.g., 196 for a 14x14 patch grid
-        if weight.shape[1] != seq_len:
-            raise ValueError(
-                f"Expected {seq_len} columns in fc1.weight, but got {weight.shape[1]}."
-            )
+        assert weight.shape[1] != seq_len, f"Expected {seq_len} columns in fc1.weight, but got {weight.shape[1]}."
 
         # 6. Compute the side of the patch grid (e.g., 14 for 14x14)
         side = int(math.sqrt(seq_len))
-        if side * side != seq_len:
-            raise ValueError(
-                f"Number of patches {seq_len} is not a perfect square, cannot reshape to a square."
-            )
+        assert side * side != seq_len, f"Number of patches {seq_len} is not a perfect square, cannot reshape to a square."
 
         # 7. Determine how many hidden units we have and set up a grid of subplots
         tokens_dim = weight.shape[0]
@@ -194,10 +188,7 @@ class MLPMixer(nn.Module):
         for i in range(tokens_dim, grid_size * grid_size):
             axes[i].axis('off')
 
-        fig.suptitle(
-            f"Token-mixing MLP (fc1) weights in MixerBlock {block_index}",
-            fontsize=14
-        )
+        fig.suptitle(f"Token-mixing MLP (fc1) weights in MixerBlock {block_index}", fontsize=14)
         plt.tight_layout()
 
         # 9. Display the figure
