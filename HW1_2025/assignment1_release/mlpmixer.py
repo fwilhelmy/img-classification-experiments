@@ -139,57 +139,53 @@ class MLPMixer(nn.Module):
 
         return output
 
-    def visualize(self, block_index=0):
+    def visualize(self, block_idx, logdir='./'):
         """
-        Visualize the weights (only the first linear layer) of the token-mixing MLP 
-        in the specified MixerBlock (by index). The weights are reshaped into a 
-        (sqrt(num_patches), sqrt(num_patches)) grid for visualization and displayed.
+        Visualize and save a square grid of the token mixing weights for a given MixerBlock.
+
+        Args:
+            block_idx (int): The index of the MixerBlock to visualize.
+            logdir (str): Directory where the figure will be saved.
+        """
+        assert block_idx > 0 or block_idx <= len(self.blocks), f"block_index={block_idx} is out of range for {len(self.blocks)} MixerBlocks."
+
+        # Select the specified mixer block (keep your existing block selection logic)
+        block = self.blocks[block_idx]
+
+        # Retrieve the weights from the token mixing linear layer.
+        weights = block.mlp_tokens.fc1.weight.data.clone() # [out_features, in_features]
+        out_features, in_features = weights.shape
+
+        # Check if in_features is a perfect square (so we can reshape the weight vector into a square image)
+        kernel_side = int(math.sqrt(in_features))
+        reshape_kernel = (kernel_side * kernel_side == in_features)
+
+        # Prepare kernels: normalize each weight vector and reshape if possible.
+        weights_np = weights.cpu().numpy()
+        kernels = []
+        for i in range(out_features):
+            kernel = weights_np[i]
+            # Normalize each kernel individually to [0, 1]
+            k_min, k_max = kernel.min(), kernel.max()
+            # Edge-case Handling (Division by Zero)
+            kernel = (kernel - k_min) / (k_max - k_min if k_max - k_min > 0 else 1)
+            if reshape_kernel: kernel = kernel.reshape(kernel_side, kernel_side)
+            kernels.append(kernel)
+
+        # Create a square grid to display all kernels (out_features = grid_size * grid_size)
+        grid_size = int(math.ceil(math.sqrt(out_features)))
+        fig, axs = plt.subplots(grid_size, grid_size, figsize=(grid_size * 2, grid_size * 2))
+        axs = axs.flatten()
+
+        for idx, ax in enumerate(axs):
+            if idx < out_features:
+                ax.imshow(kernels[idx], cmap='bwr')
+                ax.set_xticks([])
+                ax.set_yticks([])
+            else: ax.axis('off')
+
+        plt.suptitle(f'Mixer Block {block_idx} Token Mixing Weights\nShape: {weights.shape}', fontsize=10)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         
-        :param block_index: Index of the MixerBlock in self.blocks to visualize.
-        """
-        # 1. Validate block_index
-        if block_index < 0 or block_index >= len(self.blocks):
-            raise IndexError(f"block_index={block_index} is out of range for {len(self.blocks)} MixerBlocks.")
-
-        # 2. Get the specified MixerBlock
-        mixer_block = self.blocks[block_index]
-
-        # 3. Extract the token-mixing MLP from that block
-        token_mlp = mixer_block.mlp_tokens
-
-        # 4. Get the weights from the first linear layer (fc1) in the token-mixing MLP
-        #    shape: (hidden_features, seq_len) => each row is one hidden unit, each column is one patch
-        weight = token_mlp.fc1.weight.data.cpu().numpy()
-
-        # 5. Figure out how many patches we have (seq_len) and verify shape
-        seq_len = self.patchemb.num_patches  # e.g., 196 for a 14x14 patch grid
-        assert weight.shape[1] != seq_len, f"Expected {seq_len} columns in fc1.weight, but got {weight.shape[1]}."
-
-        # 6. Compute the side of the patch grid (e.g., 14 for 14x14)
-        side = int(math.sqrt(seq_len))
-        assert side * side != seq_len, f"Number of patches {seq_len} is not a perfect square, cannot reshape to a square."
-
-        # 7. Determine how many hidden units we have and set up a grid of subplots
-        tokens_dim = weight.shape[0]
-        grid_size = int(math.ceil(math.sqrt(tokens_dim)))
-        fig, axes = plt.subplots(grid_size, grid_size, figsize=(grid_size * 2, grid_size * 2))
-        axes = axes.flatten()
-
-        # 8. Plot each hidden unit as a heatmap
-        for i in range(tokens_dim):
-            row_weights = weight[i]  # shape: (seq_len,)
-            patch_map = row_weights.reshape(side, side)
-            ax = axes[i]
-            ax.imshow(patch_map, cmap='bwr')  # 'bwr' highlights positive vs. negative
-            ax.set_xticks([])
-            ax.set_yticks([])
-
-        # Hide any unused subplots if tokens_dim is not a perfect square
-        for i in range(tokens_dim, grid_size * grid_size):
-            axes[i].axis('off')
-
-        fig.suptitle(f"Token-mixing MLP (fc1) weights in MixerBlock {block_index}", fontsize=14)
-        plt.tight_layout()
-
-        # 9. Display the figure
-        plt.show()
+        fig.savefig(f"{logdir}/mixer_block_{block_idx}_token_mixing.png")
+        plt.close(fig)
