@@ -7,6 +7,8 @@ Reference:
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
+import math
+import numpy as np
 
 class BasicBlock(nn.Module):
     
@@ -79,49 +81,66 @@ class ResNet18(nn.Module):
         output = self.linear(output)
         return output
 
-    def visualize(self, n_layer, logdir):
-        """ Visualize the kernel in the desired directory """
+    def visualize(self, n_layers=1, logdir='./'):
+        """Visualize and save a square grid of all kernel weights for the first n_layers conv layers.
+        
+        Args:
+            n_layers (int): Number of convolutional layers to visualize.
+            logdir (str): Directory where the figures will be saved.
+        """
+        conv_count = 0
         for name, module in self.named_modules():
-            if not isinstance(module, torch.nn.Conv2d):
+            if not isinstance(module, nn.Conv2d):
                 continue
 
-            # Get filters and bias from the module
-            filters = module.weight.data
-            bias = module.bias  # could be None
+            # Retrieve and clone the filters (shape: [out_channels, in_channels, k, k])
+            filters = module.weight.data.clone()
+            print(f'Layer: {name}, Weights: {filters.shape}')
 
-            print(f'Layer: {module}, Weights: {filters.shape}')
+            # Determine number of filters (output channels) and grid size
+            n_filters = filters.shape[0]
+            grid_size = int(math.ceil(math.sqrt(n_filters)))
 
-            # Normalize filter values to 0-1 using min-max normalization
-            f_max, f_min = filters.max().item(), filters.min().item()
-            normalised_filters = (filters - f_min) / (f_max - f_min)
+            # Prepare each filter for display.
+            images = []
+            for i in range(n_filters):
+                f = filters[i]
+                # If filter has 3 input channels, display as color image.
+                if f.shape[0] == 3:
+                    # Convert to numpy array and normalize per filter.
+                    f = f.cpu().numpy()
+                    f = (f - f.min()) / (f.max() - f.min() + 1e-5)
+                    # Transpose to (height, width, channels) for matplotlib.
+                    f = np.transpose(f, (1, 2, 0))
+                else:
+                    # Average over input channels for filters with other channel counts.
+                    f = f.mean(dim=0).cpu().numpy()
+                    f = (f - f.min()) / (f.max() - f.min() + 1e-5)
+                images.append(f)
 
-            # Define the number of filters to visualize and number of channels per filter.
-            n_filters = 6
-            num_channels = filters.shape[1]  # e.g., 3 for RGB
-
-            # Create a figure with rows for channels and columns for filters.
-            plt.figure(figsize=(n_filters * 3, num_channels * 3))
+            # Create the square grid of subplots.
+            fig, axs = plt.subplots(grid_size, grid_size, figsize=(grid_size * 2, grid_size * 2))
             
-            # Iterate over each channel (row) and each filter (column).
-            for channel in range(num_channels):
-                for i in range(n_filters):
-                    ax = plt.subplot(num_channels, n_filters, channel * n_filters + i + 1)
+            # In case grid_size is 1, make sure axs is iterable.
+            if grid_size == 1: axs = [axs]
+            else: axs = axs.flatten()
+
+            for idx, ax in enumerate(axs):
+                if idx < len(images):
+                    # Show the image (set cmap only if image is 2D).
+                    ax.imshow(images[idx], cmap='gray' if images[idx].ndim == 2 else None)
                     ax.set_xticks([])
                     ax.set_yticks([])
+                else: ax.axis('off')
 
-                    # Get the i-th filter; shape: (in_channels, kernel_height, kernel_width)
-                    f = normalised_filters[i]
-                    
-                    # For the top row (channel 0), add descriptive text as the subplot title.
-                    if channel == 0:
-                        filter_shape = tuple(f.shape)
-                        filter_bias = bias[i].item() if bias is not None else 'None'
-                        ax.set_title(f'Filter {i}\nShape: {filter_shape}\nBias: {filter_bias}', fontsize=8)
-                    
-                    # Plot the corresponding channel of the filter.
-                    plt.imshow(f[channel].cpu().numpy(), cmap='gray')
-                    
-            plt.tight_layout()
-            plt.show()
-            plt.close()
-            break
+            plt.suptitle(f'Conv Layer: {name}\nWeights: {filters.shape}', fontsize=10)
+            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+            
+            # Save the figure using fig.savefig
+            fig.savefig(f"{save_dir}/conv_layer_{conv_count+1}.png")
+            plt.close(fig)
+
+            conv_count += 1  # Increment conv layer count after processing
+
+            if conv_count >= n_layers:
+                break
