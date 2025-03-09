@@ -98,9 +98,7 @@ def evaluate(epoch, model, dataloader, args, mode="val"):
         )
     return epoch_loss, epoch_accuracy, time.time() - start_time
 
-# Main code entry. Train the model and save the logs
-from main import train, evaluate
-def main_entry(args):
+def main_entry(args, smoke_test=False, smoke_lvl=1):
     # Check for the device
     if (args.device == "cuda") and not torch.cuda.is_available():
         warnings.warn(
@@ -132,13 +130,21 @@ def main_entry(args):
     # We need to do a little trick because the validation set should not use the augmentation.
     train_dataset = CIFAR10(root='./data', train=True, transform=train_transform, download=True)
     val_dataset = CIFAR10(root='./data', train=True, transform=test_transform, download=True)
-    train_set, _ = torch.utils.data.random_split(train_dataset, [45000, 5000])
-    _, val_set = torch.utils.data.random_split(val_dataset, [45000, 5000])
+    
+    # If smoke_test is True, reduce the dataset sizes considerably.
+    if smoke_test:
+        train_set, _ = torch.utils.data.random_split(train_dataset, [args.batch_size*smoke_lvl, len(train_dataset) - args.batch_size*smoke_lvl])
+        val_set, _ = torch.utils.data.random_split(val_dataset, [args.batch_size*smoke_lvl, len(val_dataset) - args.batch_size*smoke_lvl])
+    else:
+        train_set, _ = torch.utils.data.random_split(train_dataset, [45000, 5000])
+        _, val_set = torch.utils.data.random_split(val_dataset, [45000, 5000])
 
     # Loading the test set
     test_set = CIFAR10(root='./data', train=False, transform=test_transform, download=True)
+    if smoke_test:
+        test_set, _ = torch.utils.data.random_split(test_set, [args.batch_size*smoke_lvl, len(test_set) - args.batch_size*smoke_lvl])
 
-    # Load model
+    # Load model configuration
     print(f'Build model {args.model.upper()}...')
     if args.model_config is not None:
         print(f'Loading model config from {args.model_config}')
@@ -150,50 +156,44 @@ def main_entry(args):
     for key, val in model_config.items():
         print(f'{key}:\t{val}')
     print('############################################')
+
     model_cls = {'mlp': MLP, 'resnet18': ResNet18, 'mlpmixer': MLPMixer}[args.model]
     model = model_cls(**model_config)
     model.to(args.device)
 
-    # Optimizer
+    # Setup the optimizer
     if args.optimizer == "adamw":
-        optimizer = optim.AdamW(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-        )
+        optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     elif args.optimizer == "adam":
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
     elif args.optimizer == "sgd":
-        optimizer = optim.SGD(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-        )
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     elif args.optimizer == "momentum":
-        optimizer = optim.SGD(
-            model.parameters(),
-            lr=args.lr,
-            momentum=args.momentum,
-            weight_decay=args.weight_decay,
-        )
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
     print(
         f"Initialized {args.model.upper()} model with {sum(p.numel() for p in model.parameters())} "
         f"total parameters, of which {sum(p.numel() for p in model.parameters() if p.requires_grad)} are learnable."
     )
 
+    # We define a set of data loaders that we can use for various purposes later.
+    num_workers = 4 if args.device == 'cuda' and not smoke_test else 0
+    train_dataloader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=num_workers)
+    valid_dataloader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=num_workers)
+    test_dataloader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=num_workers)
+
     train_losses, valid_losses = [], []
     train_accs, valid_accs = [], []
     train_times, valid_times = [], []
 
-    # We define a set of data loaders that we can use for various purposes later.
-    train_dataloader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=4)
-    valid_dataloader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
-    test_dataloader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
     for epoch in range(args.epochs):
         tqdm.write(f"====== Epoch {epoch} ======>")
-        loss, acc, wall_time = train(epoch, model, train_dataloader, optimizer,args)
+        loss, acc, wall_time = train(epoch, model, train_dataloader, optimizer, args)
         train_losses.append(loss)
         train_accs.append(acc)
         train_times.append(wall_time)
 
-        loss, acc, wall_time = evaluate(epoch, model, valid_dataloader,args)
+        loss, acc, wall_time = evaluate(epoch, model, valid_dataloader, args)
         valid_losses.append(loss)
         valid_accs.append(acc)
         valid_times.append(wall_time)
@@ -203,7 +203,7 @@ def main_entry(args):
     )
     print(f"===== Best validation Accuracy: {max(valid_accs):.3f} =====>")
 
-    # Save log if logdir provided
+    # Save logs if logdir provided
     if args.logdir is not None:
         print(f'Writing training logs to {args.logdir}...')
         os.makedirs(args.logdir, exist_ok=True)
@@ -226,18 +226,13 @@ def main_entry(args):
                 print("----------------------------------------------------------------")
                 for key, val in model_config.items():
                     print(f'{key}:\t{val}')
-                summary(model, input_size=train_dataset.data[0].shape)
+                summary(model, input_size=(3, 32, 32))
 
-        # Visualize
-        if args.visualize and args.model in ['resnet18', 'mlpmixer']:
-            model.visualize(args.logdir)
+        # if args.visualize and args.model in ['resnet18', 'mlpmixer']:
+        #    model.visualize(args.logdir)
 
-def run_experiment(configs):
+def run_experiment(configs, smoke_test=False, smoke_lvl=1):
     for name in configs:
         config = configs[name]
-        main_entry(config)
+        main_entry(config, smoke_test, smoke_lvl)
         generate_plots([config.logdir], [name], config.logdir)
-
-if __name__ == "__main__":
-    # TODO
-    print("TODO: Implement the main code entry")
