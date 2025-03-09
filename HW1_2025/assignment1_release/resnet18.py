@@ -197,10 +197,7 @@ class ResNet18(nn.Module):
                 ax.set_xticks([])
                 ax.set_yticks([])
             else: ax.axis('off')
-        
-        plt.suptitle(f'Conv Layer: conv1\nWeights: {filters.shape}', fontsize=10)
+                
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-        
-        # Save the figure
         fig.savefig(f"{logdir}/conv1.png")
         plt.close(fig)

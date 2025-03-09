@@ -184,8 +184,6 @@ class MLPMixer(nn.Module):
                 ax.set_yticks([])
             else: ax.axis('off')
 
-        plt.suptitle(f'Mixer Block {block_idx} Token Mixing Weights\nShape: {weights.shape}', fontsize=10)
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-        
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])        
         fig.savefig(f"{logdir}/mixer_block_{block_idx}_token_mixing.png")
         plt.close(fig)
