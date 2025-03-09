@@ -76,7 +76,7 @@ def save_model(model: nn.Module, logdir: str) -> None:
     torch.save(model, save_path)        
     print(f"Model saved to {save_path}")
 
-def load_model(model: nn.Module, logdir: str, map_location=None) -> nn.Module:
+def load_model(logdir: str, map_location=None) -> nn.Module:
     """ Load the model's state dictionary """
     load_path = os.path.join(logdir, "model.pth")
     # If map_location is None, will load onto the devices originally saved from. 
