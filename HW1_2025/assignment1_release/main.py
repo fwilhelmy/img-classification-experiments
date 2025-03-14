@@ -33,7 +33,7 @@ class Arguments:
 
   # Optimization
   optimizer: str = 'adamw'  # [sgd, momentum, adam, adamw]
-  epochs: int = 15
+  epochs: int = 30
   lr: float = 1e-3
   momentum: float = 0.9
   weight_decay: float = 5e-4
@@ -62,6 +62,13 @@ def train(epoch, model, dataloader, optimizer, args):
         acc = compute_accuracy(logits, labels)
 
         loss.backward()
+        
+        grad_norms = {}
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                # Compute the L2 norm of the gradient tensor
+                grad_norms[name] = param.grad.data.norm(2).item()
+        
         optimizer.step()
         epoch_accuracy += acc.item() / len(dataloader)
         epoch_loss += loss.item() / len(dataloader)
@@ -70,7 +77,7 @@ def train(epoch, model, dataloader, optimizer, args):
         if idx % args.print_every == 0:
             tqdm.write(f"[TRAIN] Epoch: {epoch}, Iter: {idx}, Loss: {loss.item():.5f}")
     tqdm.write(f"== [TRAIN] Epoch: {epoch}, Accuracy: {epoch_accuracy:.3f} ==>")
-    return epoch_loss, epoch_accuracy, time.time() - start_time
+    return epoch_loss, epoch_accuracy, time.time() - start_time, grad_norms
 
 
 def evaluate(epoch, model, dataloader, args, mode="val"):
@@ -182,16 +189,21 @@ def main_entry(args, smoke_test=False, smoke_lvl=1):
     valid_dataloader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=num_workers)
     test_dataloader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=num_workers)
 
-    train_losses, valid_losses = [], []
-    train_accs, valid_accs = [], []
-    train_times, valid_times = [], []
+    train_losses, train_accs, train_times, train_grad_norms = [], [], [], {}
+    valid_losses, valid_accs, valid_times = [], [], []
 
     for epoch in range(args.epochs):
         tqdm.write(f"====== Epoch {epoch} ======>")
-        loss, acc, wall_time = train(epoch, model, train_dataloader, optimizer, args)
+        loss, acc, wall_time, grad_norms = train(epoch, model, train_dataloader, optimizer, args)
         train_losses.append(loss)
         train_accs.append(acc)
         train_times.append(wall_time)
+
+        # Save the gradient norms for this epoch
+        for name, norm in grad_norms.items():
+            if name not in train_grad_norms:
+                train_grad_norms[name] = []
+            train_grad_norms[name].append(norm)
 
         loss, acc, wall_time = evaluate(epoch, model, valid_dataloader, args)
         valid_losses.append(loss)
@@ -211,11 +223,15 @@ def main_entry(args, smoke_test=False, smoke_lvl=1):
             f.write(json.dumps(
                 {
                     "train_losses": train_losses,
-                    "valid_losses": valid_losses,
                     "train_accs": train_accs,
+                    "train_times": train_times,
+                    "train_grad_norms": train_grad_norms,
+                    "valid_losses": valid_losses,
                     "valid_accs": valid_accs,
+                    "valid_times": valid_times,
                     "test_loss": test_loss,
-                    "test_acc": test_acc
+                    "test_acc": test_acc,
+                    "test_time": test_time,
                 },
                 indent=4,
             ))
