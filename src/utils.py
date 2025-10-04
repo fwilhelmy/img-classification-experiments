@@ -122,8 +122,11 @@ def seed_experiment(seed):
     """
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.benchmark = True
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        # Prefer deterministic CuDNN behavior for repeatability.
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
 
 def to_device(tensors, device):
     if isinstance(tensors, torch.Tensor):
