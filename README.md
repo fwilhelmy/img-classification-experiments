@@ -12,4 +12,4 @@ Maintainer: Felix Wilhelmy
 All experiments rely on the CIFAR-10 dataset: 60,000 color images spread evenly across 10 categories, with 50,000 examples for training and 10,000 for evaluation. Each image measures 32×32 pixels, making CIFAR-10 a compact yet challenging benchmark for testing computer vision models.
 
 ## Credits
-I gratefully acknowledge Prof. Aaron Courville for guiding the project. I also thank the lab assistant who provided the starter implementation that forms the base of this code, which I then heavily modified for my experiments.
+I gratefully acknowledge Prof. Aaron Courville for guiding the project. I also thank lab assistants Johan Obando (IFT6135B) and Jerry Huang (IFT6135A) for providing the starter implementation that forms the base of this code, which I then heavily modified for my experiments.
